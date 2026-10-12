@@ -41,7 +41,7 @@ final class Ctl: NSObject {
         panel.ignoresMouseEvents = true  // macOS never delivers clicks over the menu bar to plain windows
         // so clicks on the "<" are caught globally instead.
         NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] e in
-            guard let self, self.collapsed, self.panel.frame.contains(NSEvent.mouseLocation) else { return }
+            guard let self, self.collapsed, self.panel.isVisible, self.panel.frame.contains(NSEvent.mouseLocation) else { return }
             if e.type == .rightMouseDown {
                 self.menu.popUp(positioning: nil, at: NSPoint(x: self.panel.frame.minX, y: self.panel.frame.minY), in: nil)
             } else {
@@ -53,7 +53,17 @@ final class Ctl: NSObject {
         panel.backgroundColor = .clear
         panel.hasShadow = false
         panel.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+        // The panel is a plain window, so it would stay over the desktop / full-screen apps when the
+        // menu bar auto-hides; poll and show it only while the bar is actually visible.
+        Timer.scheduledTimer(withTimeInterval: 0.3, repeats: true) { [weak self] _ in self?.syncPanel() }
         render()
+    }
+
+    func syncPanel() {
+        guard collapsed else { return }
+        let screen = NSScreen.screens.first { $0.frame.intersects(panel.frame) } ?? NSScreen.main
+        let barShown = screen.map { $0.visibleFrame.maxY < $0.frame.maxY } ?? true
+        if barShown { panel.orderFrontRegardless() } else { panel.orderOut(nil) }
     }
 
     @objc func click() {
